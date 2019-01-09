@@ -1,0 +1,130 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  labels:
+    app: elasticsearch
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: elasticsearch
+  serviceName: "cluster0"
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      initContainers:
+      - name: init-sysctl
+        image: busybox:1.27.2
+        command: ["sh", "-c", "sysctl -w vm.max_map_count=262144"]
+        securityContext:
+          privileged: true
+      - name: increase-the-ulimit
+        image: busybox
+        command: ["sh", "-c", "ulimit -n 65536"]
+        securityContext:
+          privileged: true
+      - name: fix-permissions
+        image: busybox
+        command: ["sh", "-c", "chown -R 1000:1000 /data"]
+        volumeMounts:
+        - name: elasticseach-volume
+          mountPath: /data
+        securityContext:
+          privileged: true
+      containers:
+      - name: elasticsearch
+        image: docker.elastic.co/elasticsearch/elasticsearch:6.5.4
+        env:
+        - name: node.name
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: discovery.zen.ping.unicast.hosts
+          value: "elasticsearch-0.cluster0.default.svc.cluster.local,elasticsearch-1.cluster0.default.svc.cluster.local,elasticsearch-2.cluster0.default.svc.cluster.local"
+        - name: ES_JAVA_OPTS
+          value: -Xms1024m -Xmx1024m
+        ports:
+        - name: http
+          containerPort: 9200
+        - name: tcp
+          containerPort: 9300
+        resources:
+          requests:
+            cpu: 0.5
+          limits:
+            cpu: 1
+        volumeMounts:
+        - name: elasticseach-volume
+          mountPath: /data
+        - name: elasticsearch-config
+          mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
+          subPath: elasticsearch.yml
+      volumes:
+        - name: elasticseach-volume
+          hostPath:
+            path: /data/elasticsearch
+            type: Directory
+        - name: elasticsearch-config
+          configMap:
+            name: elasticsearch-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cluster0
+  labels:
+    app: elasticsearch
+    type: headless
+spec:
+  clusterIP: None
+  ports:
+  - port: 9200
+    name: serving
+  - port: 9300
+    name: node-to-node
+  selector:
+    app: elasticsearch
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-external
+  labels:
+    app: elasticsearch
+    type: http
+spec:
+  type: NodePort
+  ports:
+  - nodePort: 31112
+    port: 9200
+    protocol: TCP
+    targetPort: 9200
+  selector:
+    app: elasticsearch
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-config
+  namespace: default
+data:
+  elasticsearch.yml: |+
+    cluster.name: "seifer-sandbox"
+    network.host: 0.0.0.0
+    path.data: /data
+    discovery.zen.minimum_master_nodes: 1
+
+
+    ### X-Pack
+    xpack.security.enabled: false
+    xpack.monitoring.enabled: false
+    xpack.ml.enabled: false
+    xpack.watcher.enabled: false
