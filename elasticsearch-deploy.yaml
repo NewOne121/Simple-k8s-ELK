@@ -67,11 +67,16 @@ spec:
         - name: elasticsearch-config
           mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
           subPath: elasticsearch.yml
+        - name: localtime
+          mountPath: /etc/localtime
       volumes:
         - name: elasticseach-volume
           hostPath:
             path: /data/elasticsearch
             type: Directory
+        - name: localtime
+          hostPath:
+            path: /usr/share/zoneinfo/Europe/Moscow
         - name: elasticsearch-config
           configMap:
             name: elasticsearch-config

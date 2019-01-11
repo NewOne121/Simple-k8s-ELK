@@ -7,7 +7,7 @@ metadata:
 data:
   logstash.conf: |-
     input {
-      tcp {
+      beats {
         port => 5044
         codec => "json"
       }
@@ -15,9 +15,11 @@ data:
     output {
       elasticsearch {
         hosts => "elasticsearch-external.default.svc.cluster.local:9200"
-        index => "logstash-%{+YYYY.MM.dd}"
+        index => "%{[@metadata][beat]}-%{[@metadata][version]}-%{+YYYY.MM.dd}"
         sniffing => false
+        codec => "json"
       }
+      stdout { codec => rubydebug }
     }
   logstash.yml: |-
     http.host: "0.0.0.0"
@@ -38,6 +40,9 @@ spec:
       containers:
       - image: docker.elastic.co/logstash/logstash:6.5.4
         name: logstash
+        args:
+        - -f
+        - /usr/share/logstash/pipeline/logstash.conf
         ports:
         - name: logstash
           containerPort: 5044
@@ -50,17 +55,19 @@ spec:
         - name: pipeline
           mountPath: /usr/share/logstash/pipeline
           readOnly: true
-        args:
-        - -f
-        - /usr/share/logstash/pipeline/logstash.conf
+        - name: localtime
+          mountPath: /etc/localtime
         resources:
           limits:
-            memory: 2Gi
-            cpu: "200m"
+            memory: 4Gi
+            cpu: "500m"
           requests:
             memory: 2Gi
             cpu: "200m"
       volumes:
+      - name: localtime
+        hostPath:
+          path: /usr/share/zoneinfo/Europe/Moscow
       - name: pipeline
         configMap:
           name: logstash
