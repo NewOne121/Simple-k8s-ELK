@@ -6,4 +6,5 @@ Realisation arch: Filebeat => Logstash => Elasticsearch => kibana
 
 No grok filters yet.
 
-Preconfigured to run.
+Note that it's preconfigured to run in custom environment.
+Not ready for use as is.
