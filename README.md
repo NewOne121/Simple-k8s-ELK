@@ -1,6 +1,6 @@
 # SimpleELK
 
-The purose: Monitoring kubernetes cluster logs.
+The purose: Monitoring of kubernetes cluster logs.
 
 Realisation arch: Filebeat => Logstash => Elasticsearch => kibana
 
