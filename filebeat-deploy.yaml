@@ -16,6 +16,8 @@ data:
         path: ${path.config}/modules.d/*.yml
         reload.enabled: false
     output.logstash:
+      codec.json:
+        pretty: false
       hosts: ['${LOGSTASH_HOST}:${LOGSTASH_PORT}']
 ---
 apiVersion: v1
@@ -130,6 +132,10 @@ metadata:
 rules:
 - apiGroups: [""] # "" indicates the core API group
   resources:
+  - daemonsets
+  - statefulsets
+  - services
+  - deployments
   - namespaces
   - pods
   verbs:

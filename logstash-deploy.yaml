@@ -9,17 +9,24 @@ data:
     input {
       beats {
         port => 5044
-        codec => "json"
       }
     }
+    filter {
+      grok {
+        match => { "message" => "(%{GREEDYDATA:trash}\s+\[?((?<LOGLEVEL>(INFO|LOG|WARN|ERROR))\]?:?((\s?\[(?<SOURCE>[a-z]+)\])\s)?\s?(([a-z]+\/)?[a-z]+.go:[0-9]+)?\s+|[0-9+] (([a-z]+/)?[a-z_-]+.go:[0-9]+)?]|\[%{TIMESTAMP_ISO8601}\](,[0-9]+)?|\|)|%{DATE_US} %{HOUR}:?%{MINUTE}(?::?%{SECOND}))\s*%{GREEDYDATA:logmessage}
+           } 
+           }
+      mutate {
+        remove_field => [ "TIMESTAMP_ISO8601", "YEAR", "MONTHNUM", "MONTHDAY", "HOUR", "MINUTE", "SECOND", "ISO8601_TIMEZONE" ]
+             }
+           }
     output {
       elasticsearch {
         hosts => "elasticsearch-external.default.svc.cluster.local:9200"
-        index => "%{[@metadata][beat]}-%{[@metadata][version]}-%{+YYYY.MM.dd}"
+        index => "logstash-%{+YYYY.MM.dd}"
         sniffing => false
-        codec => "json"
       }
-      stdout { codec => rubydebug }
+      stdout { codec => plain }
     }
   logstash.yml: |-
     http.host: "0.0.0.0"
