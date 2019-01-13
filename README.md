@@ -2,7 +2,7 @@
 
 The purose: Monitoring of kubernetes cluster logs using ELK stack.
 
-Realisation arch: Filebeat => Logstash => Elasticsearch => kibana
+Realisation arch: Filebeat => Logstash => Elasticsearch => kibana + Cerebro GUI (optional)
 
 Added filters for services: kube-proxy, elasticsearch, patroni, kubernetes-dashboard, etcd, logstash, coredns. (grok + mutate)
 
