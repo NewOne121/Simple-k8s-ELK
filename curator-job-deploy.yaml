@@ -36,6 +36,7 @@ metadata:
 data:
   action_file.yml: |-
     ---
+    actions:
       1:
         action: delete_indices
         description: "Clean up ES by deleting old indices"
