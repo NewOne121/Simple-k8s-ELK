@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: curator-config
+  namespace: monitoring
+  labels:
+    app: curator
+data:
+  action_file.yml: |-
+    ---
+    actions:
+      1:
+        action: delete_indices
+        description: "Clean up ES by deleting old indices"
+        options:
+          timeout_override:
+          continue_if_exception: False
+          disable_action: False
+          ignore_empty_list: True
+        filters:
+        - filtertype: age
+          source: name
+          direction: older
+          timestring: '%Y.%m.%d'
+          unit: days
+          unit_count: 10
+          field:
+          stats_result:
+          epoch:
+          exclude: False
+      2:
+        action: forcemerge
+        options:
+          max_num_segments: 2
+          delay: 300
+          timeout_override:
+          continue_if_exception: False
+          disable_action: False
+        filters:
+        - filtertype: pattern
+          kind: prefix
+          value: beats-*
+          exclude:
+        - filtertype: age
+          source: creation_date
+          direction: older
+          unit: days
+          unit_count: 1
+          exclude:
+        - filtertype: forcemerged

@@ -1,0 +1,65 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: filebeat-blobstorage-stg
+  labels:
+    k8s-app: filebeat-blobstorage-stg
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      k8s-app: filebeat-blobstorage-stg
+  template:
+    metadata:
+      labels:
+        k8s-app: filebeat-blobstorage-stg
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: filebeat-blob-stg
+        image: docker.elastic.co/beats/filebeat:6.8.9
+        args: [
+          "-c", "/etc/filebeat.yml",
+          "-e",
+        ]
+        env:
+        - name: LOGSTASH_HOST
+          value: logstash.monitoring.svc.cluster.local
+        - name: LOGSTASH_PORT
+          value: "5041"
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: config
+          mountPath: /etc/filebeat.yml
+          readOnly: true
+          subPath: filebeat.yml
+        - name: inputs
+          mountPath: /usr/share/filebeat/inputs.d
+          readOnly: true
+        - name: data
+          mountPath: /usr/share/filebeat/data
+        - name: azureblob-databricks-stg
+          mountPath: /blobstorage-stg
+      volumes:
+      - name: config
+        configMap:
+          defaultMode: 0600
+          name: filebeat-config-stg
+      - name: inputs
+        configMap:
+          defaultMode: 0600
+          name: filebeat-blobstorage-inputs-stg
+      - name: data
+        hostPath:
+          path: /var/lib/filebeat-blob-data
+          type: DirectoryOrCreate
+      - name: azureblob-databricks-stg
+        flexVolume:
+          driver: "azure/blobfuse"
+          secretRef:
+            name: blobfusecreds-stg
+          options:
+            container: configuration
+            tmppath: /tmp/blobfuse
+            mountoptions: "--file-cache-timeout-in-seconds=120"

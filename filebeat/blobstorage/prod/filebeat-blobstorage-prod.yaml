@@ -1,0 +1,65 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: filebeat-blobstorage-prod
+  labels:
+    k8s-app: filebeat-blobstorage-prod
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      k8s-app: filebeat-blobstorage-prod
+  template:
+    metadata:
+      labels:
+        k8s-app: filebeat-blobstorage-prod
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: filebeat-blob-test
+        image: docker.elastic.co/beats/filebeat:6.8.9
+        args: [
+          "-c", "/etc/filebeat.yml",
+          "-e",
+        ]
+        env:
+        - name: LOGSTASH_HOST
+          value: logstash.monitoring.svc.cluster.local
+        - name: LOGSTASH_PORT
+          value: "5042"
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: config
+          mountPath: /etc/filebeat.yml
+          readOnly: true
+          subPath: filebeat.yml
+        - name: inputs
+          mountPath: /usr/share/filebeat/inputs.d
+          readOnly: true
+        - name: data
+          mountPath: /usr/share/filebeat/data
+        - name: azureblob-databricks-prod
+          mountPath: /blobstorage-prod
+      volumes:
+      - name: config
+        configMap:
+          defaultMode: 0600
+          name: filebeat-config-prod
+      - name: inputs
+        configMap:
+          defaultMode: 0600
+          name: filebeat-blobstorage-inputs-prod
+      - name: data
+        hostPath:
+          path: /var/lib/filebeat-blob-data
+          type: DirectoryOrCreate
+      - name: azureblob-databricks-prod
+        flexVolume:
+          driver: "azure/blobfuse"
+          secretRef:
+            name: blobfusecreds-prod
+          options:
+            container: configuration
+            tmppath: /tmp/blobfuse
+            mountoptions: "--file-cache-timeout-in-seconds=120"

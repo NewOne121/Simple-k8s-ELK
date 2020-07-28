@@ -3,14 +3,13 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: elasticsearch
-  labels:
-    app: elasticsearch
+  namespace: monitoring
 spec:
-  replicas: 3
   selector:
     matchLabels:
       app: elasticsearch
   serviceName: "cluster0"
+  replicas: 3
   template:
     metadata:
       labels:
@@ -35,9 +34,10 @@ spec:
           mountPath: /data
         securityContext:
           privileged: true
+      terminationGracePeriodSeconds: 10
       containers:
       - name: elasticsearch
-        image: docker.elastic.co/elasticsearch/elasticsearch:6.5.4
+        image: docker.elastic.co/elasticsearch/elasticsearch:6.8.9
         env:
         - name: node.name
           valueFrom:
@@ -48,9 +48,9 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: discovery.zen.ping.unicast.hosts
-          value: "elasticsearch-0.cluster0.default.svc.cluster.local,elasticsearch-1.cluster0.default.svc.cluster.local,elasticsearch-2.cluster0.default.svc.cluster.local"
+          value: "elasticsearch-0.cluster0.monitoring.svc.cluster.local,elasticsearch-1.cluster0.monitoring.svc.cluster.local,elasticsearch-2.cluster0.monitoring.svc.cluster.local"
         - name: ES_JAVA_OPTS
-          value: -Xms1024m -Xmx1024m
+          value: -Xms1024m -Xmx2048m
         ports:
         - name: http
           containerPort: 9200
@@ -59,77 +59,26 @@ spec:
         resources:
           requests:
             cpu: 0.5
+            memory: "1024m"
           limits:
-            cpu: 1
+            cpu: 2
+            memory: "2048m"
         volumeMounts:
         - name: elasticseach-volume
           mountPath: /data
         - name: elasticsearch-config
           mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
           subPath: elasticsearch.yml
-        - name: localtime
-          mountPath: /etc/localtime
       volumes:
-        - name: elasticseach-volume
-          hostPath:
-            path: /data/elasticsearch
-            type: Directory
-        - name: localtime
-          hostPath:
-            path: /usr/share/zoneinfo/Europe/Moscow
         - name: elasticsearch-config
           configMap:
             name: elasticsearch-config
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: cluster0
-  labels:
-    app: elasticsearch
-    type: headless
-spec:
-  clusterIP: None
-  ports:
-  - port: 9200
-    name: serving
-  - port: 9300
-    name: node-to-node
-  selector:
-    app: elasticsearch
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: elasticsearch-external
-  labels:
-    app: elasticsearch
-    type: http
-spec:
-  type: NodePort
-  ports:
-  - nodePort: 31112
-    port: 9200
-    protocol: TCP
-    targetPort: 9200
-  selector:
-    app: elasticsearch
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: elasticsearch-config
-  namespace: default
-data:
-  elasticsearch.yml: |+
-    cluster.name: "sandbox"
-    network.host: 0.0.0.0
-    path.data: /data
-    discovery.zen.minimum_master_nodes: 1
-
-
-    ### X-Pack
-    xpack.security.enabled: false
-    xpack.monitoring.enabled: false
-    xpack.ml.enabled: false
-    xpack.watcher.enabled: false
+  volumeClaimTemplates:
+  - metadata:
+      name: elasticseach-volume
+    spec:
+      storageClassName: azurefile
+      accessModes: [ ReadWriteMany ]
+      resources:
+        requests:
+          storage: 35Gi

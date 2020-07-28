@@ -1,0 +1,139 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash
+  namespace: monitoring
+data:
+  logstash.conf: |-
+    input {
+      beats {
+        type => "beats_azureblob_dev"
+        port => 5040
+      }
+      beats {
+        type => "beats_azureblob_stg"
+        port => 5041
+      }
+      beats {
+        type => "beats_azureblob_prd"
+        port => 5042
+      }
+      beats {
+        type => "k8s_beats_input"
+        port => 5043
+      }
+      beats {
+        type => "beats_hdi_kafka"
+        port => 5044
+      }
+    }
+    filter {
+      if [type] == "k8s_beats_input" {
+        grok {
+          match => { "message" => "(%{DATE_EU:log_date} %{TIME:log_time}|%{DATE_US:log_date} %{TIME:log_time}|%{GREEDYDATA:log_date_or_time}) %{LOGLEVEL:level} (?<srcclass>[a-zA-Z$]+):? ?%{GREEDYDATA:data}"
+          }
+        }
+        multiline {
+          pattern => "(^eventlog.*|^spark.*)|(^java.lang.*|.*at .*)"
+          what => "previous"
+        }
+      }
+      if [type] =~ "beats_azureblob_*" {
+        multiline {
+          pattern => "^((?![0-9]+)|(\(\)))"
+          what => "previous"
+        }
+        grok {
+          match => { "message" => "\A(?<timestamp>%{YEAR}[./-]%{MONTHNUM}[./-]%{MONTHDAY} %{TIME}) ?%{LOGLEVEL:loglevel}\s+(?<logger>(?:[a-zA-Z0-9-]+\.)*[A-Za-z0-9$]+)\s+(ClusterName=?(?<ClusterName>[-.0-9a-zA-Z_]+))\s+(AppName=?(?<AppName>[-.0-9a-zA-Z:\[\]]+):)\s*((?<consumermsg>\[Consumer.*] Resetting offset.*)|%{DATA:logmessage})({({[^}]+},?\s*)*})?\s*$(?<stacktrace>(?m:.*))?"
+          }
+        }
+        date {
+          match => [ "timestamp", "yy/MM/dd HH:mm:ss" ]
+          target => "@logtimestamp"
+        }
+      }
+      if [type] =~ "beats_hdi_kafka*" {
+        grok {
+          match => { "message" => "\A\[%{TIMESTAMP_ISO8601:timestamp}\]\s*%{LOGLEVEL:loglevel}\s*%{GREEDYDATA:logmessage}"
+          }
+        }
+        date {
+          match => [ "timestamp", "yy-MM-dd HH:mm:ss,SSS" ]
+          target => "@logtimestamp"
+        }
+      }
+      mutate {
+        remove_field => [ "TIMESTAMP_ISO8601", "YEAR", "MONTHNUM", "MONTHDAY", "HOUR", "MINUTE", "SECOND", "ISO8601_TIMEZONE", "message"]
+        convert => {
+          "AppName" => "string"
+          "ClusterName" => "string"
+        }
+      }
+      if [consumermsg] =~ ".+" {
+        drop {}
+      }
+      if "_grokparsefailure" in [tags] {
+      drop {}
+      }
+    }
+    output {
+      if [type] == "k8s_beats_input" {
+        elasticsearch {
+          hosts => "elasticsearch-external.monitoring.svc.cluster.local:9200"
+          index => "beats-k8s-%{+YYYY.MM.dd}"
+          sniffing => false
+        }
+      }
+      if [type] == "beats_azureblob_dev" {
+        elasticsearch {
+          hosts => "elasticsearch-external.monitoring.svc.cluster.local:9200"
+          index => "beats-azureblob-dev-%{+YYYY.MM.dd}"
+          sniffing => false
+        }
+      }
+      if [type] == "beats_azureblob_stg" {
+        elasticsearch {
+          hosts => "elasticsearch-external.monitoring.svc.cluster.local:9200"
+          index => "beats-azureblob-stg-%{+YYYY.MM.dd}"
+          sniffing => false
+        }
+      }
+      if [type] == "beats_azureblob_prd" {
+        elasticsearch {
+          hosts => "elasticsearch-external.monitoring.svc.cluster.local:9200"
+          index => "beats-azureblob-prd-%{+YYYY.MM.dd}"
+          sniffing => false
+        }
+      }
+      if [type] =~ "beats_hdi_kafka*" {
+        elasticsearch {
+          hosts => "elasticsearch-external.monitoring.svc.cluster.local:9200"
+          index => "beats-hdikafka-%{+YYYY.MM.dd}"
+          sniffing => false
+        }
+      }
+      stdout { codec => plain }
+    }
+  logstash.yml: |-
+    http.host: "0.0.0.0"
+    path.config: /usr/share/logstash/pipeline
+    xpack.monitoring.enabled: false
+  log4j2.properties: |-
+    name = LogstashPropertiesConfig
+
+    appender.console.type = Console
+    appender.console.name = plain_console
+    appender.console.layout.type = PatternLayout
+    appender.console.layout.pattern = [%d{ISO8601}][%-5p][%-25c] %m%n
+
+    appender.json_console.type = Console
+    appender.json_console.name = json_console
+    appender.json_console.layout.type = JSONLayout
+    appender.json_console.layout.compact = true
+    appender.json_console.layout.eventEol = true
+
+    logger.log4j.name = logstash.outputs.stdout
+    logger.log4j.level = TRACE
+
+    rootLogger.level = TRACE
+    rootLogger.appenderRef.console.ref = ${sys:ls.log.format}_console

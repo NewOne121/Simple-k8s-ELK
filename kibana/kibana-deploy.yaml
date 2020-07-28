@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  namespace: monitoring
+  labels:
+    app: kibana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+     app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      containers:
+      - name: kibana
+        image: docker.elastic.co/kibana/kibana:6.8.9
+        env:
+        - name: xpack.security.enabled
+          value: "false"
+        - name: ELASTICSEARCH_URL
+          value: "http://elasticsearch-external.monitoring.svc.cluster.local:9200"
+        resources:
+          limits:
+            cpu: 700m
+          requests:
+            cpu: 300m
+        ports:
+        - containerPort: 5601
+          name: kibana
+          protocol: TCP
+

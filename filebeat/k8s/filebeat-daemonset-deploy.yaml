@@ -1,0 +1,66 @@
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: filebeat-k8s
+  labels:
+    k8s-app: filebeat-k8s
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      k8s-app: filebeat-k8s
+  template:
+    metadata:
+      labels:
+        k8s-app: filebeat-k8s
+    spec:
+      serviceAccountName: filebeat
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: filebeat-k8s
+        image: docker.elastic.co/beats/filebeat:6.8.9
+        args: [
+          "-c", "/etc/filebeat.yml",
+          "-e",
+        ]
+        env:
+        - name: LOGSTASH_HOST
+          value: logstash.monitoring.svc.cluster.local
+        - name: LOGSTASH_PORT
+          value: "5043"
+        securityContext:
+          runAsUser: 0
+        resources:
+          limits:
+            memory: 500Mi
+          requests:
+            memory: 200Mi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/filebeat.yml
+          readOnly: true
+          subPath: filebeat.yml
+        - name: inputs
+          mountPath: /usr/share/filebeat/inputs.d
+          readOnly: true
+        - name: data
+          mountPath: /usr/share/filebeat/data
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          defaultMode: 0600
+          name: filebeat-config-k8s
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+      - name: inputs
+        configMap:
+          defaultMode: 0600
+          name: filebeat-inputs-k8s
+      - name: data
+        hostPath:
+          path: /var/lib/filebeat-data
+          type: DirectoryOrCreate

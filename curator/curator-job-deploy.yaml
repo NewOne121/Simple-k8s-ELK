@@ -1,0 +1,29 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: elasticsearch-curator
+  namespace: monitoring
+  labels:
+    app: elasticsearch-curator
+spec:
+  schedule: "0 12 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid #We don’t want to run more than one concurrent job at a time
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - image: bobrik/curator:5.8.1
+            name: curator
+            args: ["--config", "/etc/config/config.yml", "/etc/config/action_file.yml"]
+            volumeMounts:
+            - name: config
+              mountPath: /etc/config
+          volumes:
+          - name: config
+            configMap:
+              name: curator-config
+          restartPolicy: OnFailure

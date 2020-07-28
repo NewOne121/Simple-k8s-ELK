@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logstash
+  namespace: monitoring
+  labels:
+    app: logstash
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: logstash
+  template:
+    metadata:
+      labels:
+        app: logstash
+    spec:
+      containers:
+      - image: seifdoc/logstash
+        name: logstash
+        args:
+        - -f
+        - /usr/share/logstash/pipeline/logstash.conf
+        ports:
+        - name: blob-dev
+          containerPort: 5040
+          protocol: TCP
+        - name: blob-stg
+          containerPort: 5041
+          protocol: TCP
+        - name: blob-prod
+          containerPort: 5042
+          protocol: TCP
+        - name: beats-k8s
+          containerPort: 5043
+          protocol: TCP
+        - name: logstash-beats-hdikafka
+          containerPort: 5044
+          protocol: TCP
+        env:
+        - name: DEV_STORAGE_ACCOUNT_NAME
+          valueFrom:
+            secretKeyRef:
+              name: logstash-secret
+              key: dev_storage_account_name
+        - name: STG_STORAGE_ACCOUNT_NAME
+          valueFrom:
+            secretKeyRef:
+              name: logstash-secret
+              key: stg_storage_account_name
+        - name: PROD_STORAGE_ACCOUNT_NAME
+          valueFrom:
+            secretKeyRef:
+              name: logstash-secret
+              key: prod_storage_account_name
+        - name: DEV_STORAGE_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: logstash-secret
+              key: dev_storage_access_key
+        - name: STG_STORAGE_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: logstash-secret
+              key: stg_storage_access_key
+        - name: PROD_STORAGE_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: logstash-secret
+              key: prod_storage_access_key
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/logstash/config/logstash.yml
+          subPath: logstash.yml
+          readOnly: true
+        - name: pipeline
+          mountPath: /usr/share/logstash/pipeline
+          readOnly: true
+        - name: log4j
+          mountPath: /usr/share/logstash/config/log4j2.properties
+          subPath: log4j2.properties
+          readOnly: true
+        resources:
+          limits:
+            memory: 4Gi
+            cpu: "500m"
+          requests:
+            memory: 2Gi
+            cpu: "200m"
+      volumes:
+      - name: pipeline
+        configMap:
+          name: logstash
+          items:
+          - key: logstash.conf
+            path: logstash.conf
+      - name: config
+        configMap:
+          name: logstash
+          items:
+          - key: logstash.yml
+            path: logstash.yml
+      - name: log4j
+        configMap:
+          name: logstash
+          items:
+          - key: log4j2.properties
+            path: log4j2.properties
